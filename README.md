@@ -1,2 +1,5 @@
 # sivpack
 Synthetic Instrumental Variable Method R-package
+
+The package estimates a linear regressions with one endogeneous variable using three different techniques of the SIV method.The essense of the mthod is in construction of a synthetic IV using  s = x + k delta r, where x is the endogenous variable in the reduced form, and r is a vector determined in the plane spanned by the outcome variable y and endogenous variable x. Vector r is constructed as an orthogonal vector to x. 
+The first method is a simple SIv method that assumes homoscedasdicity of the error term. This method implies that if we synthesize such an  SIV,  s*, that satisfies E(s*'e'e) = 0, then, E(s*u) = 0 also must hold.Thus, in this case, the SIV method determines a valid SIV such that E( u| s*)=0 is identified by  s*= x+k delta_0  r  where delta_0= arg_delta[E(ee'|s*)=0], and e is the first-stage error term. Then, beta, the  parameter associated with the endogenous variable in the regression equaition is identified by an IV estimator: hat{beta}_{IV}=(x's*)^{-1} x'y.

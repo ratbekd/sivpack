@@ -37,13 +37,14 @@
 #' X <-as.character(colnames(H0))[2] ###ENDOEGENOUS variable
 #' H<- as.character(colnames(H0))[-(1:2)] #
 #' result <- siv_regression(data, Y, X, H, reps=5)
-#' iv1 <-(result$IV1)
-#' iv2 <-(result$IV2)
-#' iv3 <-(result$IV3)
+#' iv1 <-(result$IV1)# a simple SIV
+#' iv2 <-(result$IV2)# a robust parametric SIV (RSIV-p)
+#' iv3 <-(result$IV3)# a robust non-parametric SIV (RSIV-n)
 #' summ.iv1 <- summary(iv1, diagnostics=TRUE)
 #' summ.iv2<- summary(iv2, diagnostics=TRUE)
 #' summ.iv3 <- summary(iv3, diagnostics=TRUE)
 #'result$citable ###  renders the CI table of beta estimates
+#'result$delta0 ###  renders the delta0 estimates:SIV, RSIV-p, RSIV-n.
 siv_regression <- function(data, Y, X, H, reps) {
   library(dplyr)
   library(ivreg)
@@ -83,6 +84,8 @@ siv_regression <- function(data, Y, X, H, reps) {
   formula <- as.formula(formula_str)# Convert to formula object
   fitx<-lm(formula, data=data)
   x<-resid(fitx)
+  xx <- min(length((x-mean(x))),length((y-mean(y))))
+  data <- data[1:xx,]
   #saving the transformed x and y
   data$x<-(x-mean(x))
   data$y<-(y-mean(y))
@@ -368,5 +371,5 @@ siv_regression <- function(data, Y, X, H, reps) {
     iv3<-ivreg(formula, instruments, data=data)
     #
   }
-  return(list(IV1 = (iv1), IV2 = (iv2), IV3 = (iv3), citable=mv))
+  return(list(IV1 = (iv1), IV2 = (iv2), IV3 = (iv3), citable=mv, delta0=c(d0m, d0rm, d0rnm)))
 }

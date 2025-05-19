@@ -11,8 +11,8 @@ In the robust to heteroscedasticity approach, we use the difference in the degre
 Then,  a valid SIV such that $E(  u| s*)=0$ is identified by $s*= x+k\delta_0  r$  where $\delta_0 =argmin_{\delta}(  D_{\Delta})$.   The details can be found in the related paper at  https://github.com/ratbekd/SIV/blob/main/SIV_DT_R7.pdf.
 
 The package can be installed in Rstudio paltform using this command:
-remotes::install_git("https://github.com/ratbekd/sivpack.git")
-library(sivpack)
+remotes::install_git("https://github.com/ratbekd/siv.git")
+library(siv)
 ## Example based on Mroz data
 data <- wooldridge::mroz  # Use sample data set
 

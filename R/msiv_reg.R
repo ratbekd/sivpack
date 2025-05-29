@@ -1,21 +1,27 @@
-#' Perform Instrumental Variable Regression using SIV
+#' Perform Instrumental Variable Regression using multiple SIVs
 #'
 #' @param data A data frame.
 #' @param Y Name of the dependent variable.
-#' @param X Name of the endogenous variable.
-#' @param H Vector of exogenous variable names.
-#' @param reps Number of bootstrap loops.
+#' @param E Name of the endogenous variables.
+#' @param H Vector of exogenous variable names
+#' @param reps Number of bootsrap loops.
 #' @return A list containing OLS and IV regression results.
 #' @export
-#' @importFrom stats as.formula lm resid sd cov cor rnorm summary qt df.residual
-#' @importFrom sandwich vcovHC
-#' @importFrom AER ivreg
 #' @examples
 #' df <- wooldridge::mroz  # Use sample data set
 #' data <- df[complete.cases(df), ]  # Remove missing values
-#' result <- siv_regression(data, "hours", "lwage", c("educ", "age", "kidslt6", "kidsge6", "nwifeinc"), reps=5)
-#' summary(result$IV2, diagnostics=TRUE)
-siv_regression <- function(data, Y, X, H, reps) {
+#' attach(data)
+#' result <- msiv_reg(data, "hours", c("lwage", "educ"),c( "age", "kidslt6", "kidsge6", "nwifeinc"), reps=5)
+#' iv1 <-(result$IV1)# a simple SIV
+#' iv2 <-(result$IV2)# a robust parametric SIV (RSIV-p)
+#' iv3 <-(result$IV3)# a robust non-parametric SIV (RSIV-n)
+#' summ.iv1 <- summary(iv1, diagnostics=TRUE)
+#' summ.iv2<- summary(iv2, diagnostics=TRUE)
+#' summ.iv3 <- summary(iv3, diagnostics=TRUE)
+#'  names(result$siv_list)## view the names of the SIVs
+#' siv1 <- as.numeric(result$siv_list[[5]])## retrieve the SIV series.
+#' siv2 <- as.numeric(results$siv_list[[11]])
+msiv_reg <- function(data, Y, E, H, reps) {
   library(dplyr)
   library(ivreg)
   library(lmtest)
@@ -25,37 +31,93 @@ siv_regression <- function(data, Y, X, H, reps) {
   library()
   rad2deg <- function(rad) {(rad * 180) / (pi)}
   deg2rad <- function(deg) {(deg * pi) / (180)}
-  # Ensure variables exist in data
-  if (!all(c(Y, X, H) %in% names(data))) {
-    stop("Some variables are missing in the dataset.")
+  #Two-sample Anderson-Darling statistic
+  ad2_stat <- function(x, y) {
+    # Sample sizes
+    n <- length(x)
+    m <- length(y)
+
+    # Pooled sample and pooled ecdf
+    z <- c(x, y)
+    z <- z[-which.max(z)] # Exclude the largest point
+    H <- rank(z) / (n + m)
+
+    # Statistic computation via ecdf()
+    (n * m / (n + m)^2) * sum((ecdf(x)(z) - ecdf(y)(z))^2 / ((1 - H) * H))
+
   }
+
+  check_sign_change <- function(x) {
+    # Step 2: Check if there is a sign change
+    signs <- sign(x)  # Get sign (-1, 0, or 1)
+    sign_changes <- any(diff(signs) != 0, na.rm = TRUE)  # Detect if sign changes
+
+    # Step 3: Return 1 if both conditions are met, otherwise 0
+    return(as.integer(sign_changes))
+  }
+
+
+  check_initial_abs_increase <- function(x) {
+    # Step 1: Check if the absolute values start by increasing (non-decreasing trend)
+    abs_x <- abs(x)
+    initial_increasing <- all(diff(abs_x[1:min(20, length(abs_x))]) >= 0)  # Check first 3 points or as many as available
+
+    # Step 3: Return 1 if both conditions are met, otherwise 0
+    return(as.integer(initial_increasing))
+  }
+  find_first_sign_change <- function(x) {
+    sign_changes <- which(diff(sign(x)) != 0)  # Find indices where sign changes
+    if (length(sign_changes) > 0) {
+      return(sign_changes[1] + 1)  # Return the first occurrence (adjust for diff)
+    } else {
+      return(NA)  # Return NA if no sign change
+    }
+  }
+  #Ensure variables exist in data
+   if (!all(c(Y, E, H) %in% names(data))) {
+     stop("Some variables are missing in the dataset.")
+   }
   # Y <- as.character(colnames(H0))[1] ###OUTCOME variable
   # X <-as.character(colnames(H0))[2] ###ENDOEGENOUS variable
   # H<- as.character(colnames(H0))[-(1:2)] ##### EXOGENOUS variables
-  #print(H)
-  formula_str <- paste(paste0(Y," ~ ", X,"+"), paste(H, collapse = " + "))## Construct formula as a string
-  formula <- as.formula(formula_str)# Convert to formula object
-  #print(formula)
-
+  if (reps>10){reps=10} else{reps=reps}
   # determine the number of rows
   N<-nrow(data)
-  #####Traditional methods
+  zk=length(E)
+  N=nrow(data)
+  siv_list <- list()
+  signk=0
+  #####loop for each endogenous variable
+for (g in 1:length(E)) {
+  X <- E[g]
 
   #####SIV Method
 
   ###Basic vectors for  SIV calculation###
-  #y1<-hours ### the outcome variabe
   ## Factoring out the effects of other exogenous variables
-  formula_str <- paste(paste0(Y," ~ "), paste(H, collapse = " + "))## Construct formula as a string
+  if(length(E)>1){
+  formula_str <- paste(paste0(Y," ~ "), paste(H, collapse = " + "),paste("+",E[-g],collapse = "+"))## Construct formula as a string
   formula <- as.formula(formula_str)# Convert to formula object
+
   fity<-lm(formula, data=data)
   y<-resid(fity)
-  #x1<-lwage### the endogenous variable
   ## Factoring out the effects of other exogenous variables
-  formula_str <- paste(paste0(X," ~ "), paste(H, collapse = " + "))## Construct formula as a string
+  formula_str <- paste(paste0(X," ~ "), paste(H, collapse = " + "),paste("+",E[-g],collapse = "+"))## Construct formula as a string
   formula <- as.formula(formula_str)# Convert to formula object
   fitx<-lm(formula, data=data)
   x<-resid(fitx)
+  }else{
+    formula_str <- paste(paste0(Y," ~ "), paste(H, collapse = " + "))## Construct formula as a string
+    formula <- as.formula(formula_str)# Convert to formula object
+    fity<-lm(formula, data=data)
+    y<-resid(fity)
+    #x1<-lwage### the endogenous variable
+    ## Factoring out the effects of other exogenous variables
+    formula_str <- paste(paste0(X," ~ "), paste(H, collapse = " + "))## Construct formula as a string
+    formula <- as.formula(formula_str)# Convert to formula object
+    fitx<-lm(formula, data=data)
+    x<-resid(fitx)
+  }
   #saving the transformed x and y
   data$x<-(x-mean(x))
   data$y<-(y-mean(y))
@@ -68,42 +130,30 @@ siv_regression <- function(data, Y, X, H, reps) {
   V<-(V-mean(V))/sd(V)
   V<-V*sd(x0)
   data$R<-V
-  theta=0
-  theta1=0
-  d<-0.01# starting value for delta
-  delt<-0.01# step to change delta
-  while(theta1<70){
-    data$siv<-(data$x-d*data$R) ### SIV
-    theta <- acos( sum(data$x*data$siv) / ( sqrt(sum(data$x^2)) * sqrt(sum(data$siv^2)) ) )
-    theta1<-rad2deg(theta)
-    d=d+delt
-  }
-  dd <- d
-  dl=round(dd/delt)
+
   #####################################################################
   ############ Determining the sign of cor(x,u)
   k=0
   j=1
-  data$siv=0
+
   signc=matrix(ncol = 5, nrow = 2)
   signc[1,1] <-1
   signc[2,1] <--1
-  # ininc=matrix(ncol = 2, nrow = 2)
-  # ininc[1,1] <-1
-  # ininc[2,1] <--1
+  #
 
   for (j in 1:2) {
     if(j<2){k=1}else{k=-1}#the assumed sign for cor(x,u)
 
     # IV regression
-    #dd<-3#end value for delta
+    theta=0
+    theta1=0
+    dd<-3#end value for delta
     d<-0.01# starting value for delta
     delt<-0.01# step to change delta
     i<-1 ### starting value for a counter
     ## placeholders for variables
-    # m1=0
-    # m2=0
-    dl=round(dd/delt)-1
+
+    dl=round(dd/delt)
     m1 <- numeric(length = dl)  # Pre-allocate memory
     m2 <- numeric(length = dl)
     while (d<dd){# we compute m1 until siv is close to become perpendicular to x
@@ -137,19 +187,14 @@ siv_regression <- function(data, Y, X, H, reps) {
   for(j in 1:2){
     ch[j] <- signc[j,2]+signc[j,3]+signc[j,4]+signc[j,5]
   }
-  # TRUE
-  # for(j in 1:2){cat("the assumed sign for cor(x,u):", signc[j,1], if(ch[j]-max(ch)!=0)
-  # {"is FALSE"
-  # }else{"is TRUE"},  "\n")
-  #   ch[j] <- signc[j,2]+signc[j,3]+signc[j,4]+signc[j,5]
-  # } # TRUE}}
+
 
   k <- signc[which.max(ch),1]
-  cat("The true sign for cor(xu) is", k )
+  signk[g] <- k
+  #cat("The true sign for cor(xu) is", k )
   #####################################
 
-  # if(signc[j,2]*signc[j,1]==0){"No endogeneity"}else{k=signc[j,1]}
-  #s<-1 # the assumed sign for cor(x,u)
+
   if(k!=0){
     ############# Initial settings for SIV
     vvar=0
@@ -160,20 +205,10 @@ siv_regression <- function(data, Y, X, H, reps) {
     b2r=0
     b2rp=0
     b2t=0
-    N<-nrow(data)
-    reps=reps
+   #
+    if (reps<2){reps=2} else{reps=reps}
     S=round(N*.999)
     l=1
-    fitc <- matrix(ncol = 1, nrow = reps)
-    sumb2=matrix(ncol = 1, nrow = reps)
-    fitcr <- matrix(ncol = 1, nrow = reps)
-    sumb2r=matrix(ncol = 1, nrow = reps)
-    fitcrn <- matrix(ncol = 1, nrow = reps)
-    sumb2rn=matrix(ncol = 1, nrow = reps)
-    fitct <- matrix(ncol = 1, nrow = reps)
-    sumb2t=matrix(ncol = 1, nrow = reps)
-    lowbp=0
-    upbp=0
 
     ##### Bootstrap sampling loop. You may use data <- mydata instead of data <- mydata[sample(1:N, S),  TRUE]
     #if you just want see how it works for the original sample data.
@@ -236,122 +271,89 @@ siv_regression <- function(data, Y, X, H, reps) {
         d<-d+delt
         i<-i+1
       }
-      ### updating the formula for regressions
-      formula_str <- paste(paste0(Y," ~ ", X,"+"), paste(H, collapse = " + "))## Construct formula as a string
-      formula <- as.formula(formula_str)# Convert to formula object
-      ### update with your own instruments: instruments<-~ siv+all exogenous variables
-      iv_str <- paste(paste0(" ~ ", "siv","+"), paste(H, collapse = " + "))## Construct formula as a string
-      instruments <- as.formula(iv_str)# Convert to formula object
-      #instruments<-~siv+educ+ age+kidslt6+ kidsge6+ nwifeinc
-      # formula <-hours~lwage+educ+ age+kidslt6+ kidsge6+ nwifeinc
-      #### DT condition of homoscedatic case
+
+          ### updating the formula for regressions
+            # #### DT condition of homoscedatic case
       d0 <- (which.min(abs(m1)))*delt
       d0i[l] <- d0
-      data_sample$siv<-(data_sample$x-k*d0*data_sample$R)
-      iv2<-ivreg(formula, instruments, data=data_sample)
-      summ.iv2 <- summary(iv2, diagnostics=T)#, vcov. = function(x) vcovHC(x, type="HC1"), diagnostics=T)
-      ## saving the estimation parameters for each sample
-      fitc[l] <- iv2$coefficients[2]
-      sumb2[l] <-  summ.iv2$coefficients[2,2]
 
       ### DT point for heteroscedastic case- parametric approach
       d0r <-  which.min(dv2)*delt
       d0ri[l] <- d0r
-      data_sample$siv<-(data_sample$x-k*d0r*data_sample$R)
-      iv3<-ivreg(formula, instruments, data=data_sample)
-      summ.iv3 <- summary(iv3, diagnostics=T)#,  vcov. = function(x) vcovHC(x, type="HC1"), diagnostics=T)
-      ## saving the estimation paramters for each sample
-      fitcr[l] <- iv3$coefficients[2]
-      sumb2r[l] <-  summ.iv3$coefficients[2,2]
 
       #### DT point for heteroscedastic case- non-parametric approach
       d0rn <- which.min(x4)*delt
       d0rni[l] <- d0rn
-      data_sample$siv<-(data_sample$x-k*d0rn*data_sample$R)
-      iv4<-ivreg(formula, instruments, data=data_sample)
-      summ.iv4 <- summary(iv4, diagnostics=T)#,
-      ## saving the estimation paramters for each sample
-      fitcrn[l] <- iv4$coefficients[2]
-      sumb2rn[l] <-  summ.iv4$coefficients[2,2]
-      l <- l+1
+
+        l <- l+1
     }
 
-    ## Distribution of sample paramters
-    # the simple homogenous case
-    fitc <- fitc[complete.cases(fitc)]
-    sumb2<- sumb2[complete.cases(sumb2)]
-    alpha <- 0.05 # chosen significance level
-    b2[1] <- mean(fitc)# the endogenous parameter beta
-    df <- df.residual(iv2)# degrees of freedom for t-stat
-    seb2 <-mean(sumb2)# the average standard error of the parameter beta
-    tc <- qt(1-alpha/2, df) ## t-statistic
-    lowbp[1] <- b2[1]-tc*seb2  # lower bound for beta
-    upbp[1] <- b2[1]+tc*seb2   # upper bound for beta
-
-    #### The parametric heterogenous case
-    fitcr <- fitcr[complete.cases(fitcr)]
-    sumb2r<- sumb2r[complete.cases(sumb2r)]
-    alpha <- 0.05 # chosen significance level
-    b2[2] <- mean(fitcr)
-    df <- df.residual(iv3)
-    seb2r <-mean(sumb2r)
-    tc <- qt(1-alpha/2, df)
-    lowbp[2] <- b2[2]-tc*seb2r  # lower bound
-    upbp[2] <- b2[2]+tc*seb2r   # upper bound
-
-    #################The non-parametric heterogenous case
-    fitcrn <- fitcrn[complete.cases(fitcrn)]
-    sumb2rn<- sumb2rn[complete.cases(sumb2rn)]
-    alpha <- 0.05 # chosen significance level
-    b2[3] <- mean(fitcrn)
-    df <- df.residual(iv4)
-    seb2rn <-mean(sumb2rn)
-    tc <- qt(1-alpha/2, df)
-    lowbp[3] <- b2[3]-tc*seb2rn  # lower bound
-    upbp[3] <- b2[3]+tc*seb2rn   # upper bound
-
-    ### Table for CI of beta
-    mv<-data.frame(lowbp,b2,upbp)
-    colnames(mv)<-c("low beta","mean b2", "high beta")
-    rownames(mv)<- c("SIV","SIVRr","SIVRn")#, "nearc4")
-    ###   (mv)
-
-    ### final satge estimations
+   ### random shocks for SIVs
+  v1 <- rnorm(N, 0, sd(x))
+  v2 <- rnorm(N, 0, sd(x))
+  v3 <- rnorm(N, 0, sd(x))
+    ### final stage estimations
     ###### Simple homogenous assumption case
     d0i <-  d0i[complete.cases(d0i)]
     d0m <- mean(d0i)
-    data$siv<-(data$x-k*d0m*data$R)
-    iv2<-ivreg(formula, instruments, data=data)
-    summ.iv2 <- summary(iv2, diagnostics=T)#
+    siv_list[[paste0("siv1", g)]]<-(data$x-k*d0m*data$R)
+    siv_list[[paste0("siv1b",g)]]<-(data$x-k*d0m*data$R+v1)
     ############Paramteric heterogenous case
     d0ri <-  d0ri[complete.cases(d0ri)]
     d0rm <- mean(d0ri)
-    data$siv<-(data$x-k*d0rm*data$R)
-    iv3<-ivreg(formula, instruments, data=data)
-    summ.iv3 <- summary(iv2, diagnostics=T)#
-
-    #### Non-parameteric heterogenous case
+    siv_list[[paste0("siv2", g)]]<-(data$x-k*d0rm*data$R)
+    siv_list[[paste0("siv2b",g)]]<-(data$x-k*d0rm*data$R+v2)
+      #### Non-parameteric heterogenous case
     d0rni <-  d0rni[complete.cases(d0rni)]
     d0rnm <- mean(d0rni)
-    data$siv<-(data$x-k*d0rnm*data$R)
-    iv4<-ivreg(formula, instruments, data=data)
-    summ.iv4 <- summary(iv2, diagnostics=T)#
+    siv_list[[paste0("siv3", g)]]<-(data$x-k*d0rnm*data$R)
+    siv_list[[paste0("siv3b",g)]]<-(data$x-k*d0rnm*data$R+v3)
+
   }else{
     v=rnorm(N,0,1)
     print("NO endogeneity problem. All SIV estimates are the same as the OLS")
     d0m=0.001
-    data$siv<-(data$x-k*d0m*data$R)+v
-    iv2<-ivreg(formula, instruments, data=data)
-    summ.iv2 <- summary(iv2, diagnostics=T)#
-    d0rm=0.001
-    data$siv<-(data$x-k*d0rm*data$R)+v
-    iv3<-ivreg(formula, instruments, data=data)
-    summ.iv3 <- summary(iv2, diagnostics=T)#
+    siv_list[[paste0("siv1", g)]]<-(data$x-k*d0m*data$R)
+      ############Parametric heterogeneous case
+    d0rm <- 0.001
+    siv_list[[paste0("siv2", g)]]<-(data$x-k*d0rm*data$R)
+    #### Non-parameteric heterogenous case
+    d0rnm <- 0.001
+    siv_list[[paste0("siv3", g)]]<-(data$x-k*d0rnm*data$R)
 
-    d0rnm=0.001
-    data$siv<-(data$x-k*d0rnm*data$R)+v
-    iv4<-ivreg(formula, instruments, data=data)
-    summ.iv4 <- summary(iv2, diagnostics=T)#
   }
-  return(list(IV2 = (iv2), IV3 = (iv3), IV4 = (iv4), citable=mv))
+
+
 }
+  my_df <- data.frame(matrix(nrow = N, ncol = 0))  # empty data frame with 5 rows
+  for (name in names(siv_list)) {
+  my_df[[name]] <- siv_list[[name]]
+}
+
+  for (name in names(siv_list)) {
+    data[[name]] <- siv_list[[name]]
+  }
+
+  vars1 <- names(my_df)[grepl("^siv1", names(my_df))]
+  vars2 <- names(my_df)[grepl("^siv2", names(my_df))]
+  vars3 <- names(my_df)[grepl("^siv3", names(my_df))]
+  ###### Simple homogeneous assumption case
+  formula_str <- paste(paste0(Y," ~ "), paste(paste(E,collapse ="+"), "+"), paste(H, collapse = " + "))## Construct formula as a string
+  formula <- as.formula(formula_str)# Convert to formula object
+
+  iv_str <- paste(paste0(" ~ "), paste(vars1, collapse = " + "), paste0("+"),paste( H, collapse = " + "))## Construct formula as a string
+  instruments <- as.formula(iv_str)# Convert to formula object
+  iv1<-ivreg(formula, instruments, data=data)
+   ############Parametric heterogeneous case
+  iv_str <- paste(paste0(" ~ "), paste(vars2, collapse = " + "), paste0("+"),paste( H, collapse = " + "))## Construct formula as a string
+  instruments <- as.formula(iv_str)# Convert to formula object
+  iv2<-ivreg(formula, instruments, data=data)
+
+  #### Non-parametric heterogeneous case
+  v_str <- paste(paste0(" ~ "), paste(vars3, collapse = " + "), paste0("+"),paste( H, collapse = " + "))## Construct formula as a string
+  instruments <- as.formula(iv_str)# Convert to formula object
+  iv3<-ivreg(formula, instruments, data=data)
+
+  return(list(IV1 = (iv1), IV2 = (iv2), IV3 = (iv3),siv_list = (siv_list), signk = (signk)))
+
+              }

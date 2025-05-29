@@ -28,4 +28,13 @@ df <- wooldridge::mroz  # Use sample data set
 data <- df[complete.cases(df), ]  # Remove missing values
 attach(data)
 result <- msiv_reg(data, "hours", c("lwage", "educ"),c( "age", "kidslt6", "kidsge6", "nwifeinc"), reps=5)
+iv1 <-(result$IV1)# a simple SIV
+iv2 <-(result$IV2)# a robust parametric SIV (RSIV-p)
+iv3 <-(result$IV3)# a robust non-parametric SIV (RSIV-n)
+summ.iv1 <- summary(iv1, diagnostics=TRUE)
+summ.iv2<- summary(iv2, diagnostics=TRUE)
+summ.iv3 <- summary(iv3, diagnostics=TRUE)
+ names(result$siv_list)## view the names of the SIVs
+siv1 <- as.numeric(result$siv_list[[5]])## retrieve the SIV series.
+siv2 <- as.numeric(results$siv_list[[11]])
 }

@@ -20,10 +20,13 @@ data <- data[complete.cases(data), ]  # Remove missing values
 
 attach(data)
 # Run regression
+To run  a SIV regression with a single endogenous variable call the function siv_reg (data, Y, X, H,reps).
+
 #Y="hours" # outcome variable
 #X="lwage"# endogenous variable
 #H=c("educ", "age", "kidslt6", "kidsge6", "nwifeinc")# exogenous variables
 #reps= the number of loops for the bootstrap
+
 result <- siv_regression(data, "hours", "lwage", c("educ", "age", "kidslt6", "kidsge6", "nwifeinc"), reps=5)
 
 iv1 <- (result$IV1)
@@ -46,14 +49,33 @@ $result\$$ $delta_0$
  
  In this case, use function msiv_reg (data, E, H,reps)
  
- result <- msiv_reg(data, "hours", c("lwage", "educ"),c( "age", "kidslt6", "kidsge6", "nwifeinc"), reps=5)
+ data: A data frame
+
+Y: Name of the dependent variable
+
+E: Names of the endogenous variables
+
+H: Vector of exogenous variable names
+
+reps: Number of bootsrap loops
+
+result <- msiv_reg(data, "hours", c("lwage", "educ"),c( "age", "kidslt6", "kidsge6", "nwifeinc"), reps=5)
+
 iv1 <-(result$IV1)# a simple SIV
+
 iv2 <-(result$IV2)# a robust parametric SIV (RSIV-p)
+
 iv3 <-(result$IV3)# a robust non-parametric SIV (RSIV-n)
+
 summ.iv1 <- summary(iv1, diagnostics=TRUE)
+
 summ.iv2<- summary(iv2, diagnostics=TRUE)
+
 summ.iv3 <- summary(iv3, diagnostics=TRUE)
- names(result$siv_list)## view the names of the SIVs
+
+names(result$siv_list)## view the names of the SIVs
+
 siv1 <- as.numeric(result$siv_list[[5]])## retrieve the SIV series.
+
 siv2 <- as.numeric(results$siv_list[[11]])
 

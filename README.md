@@ -23,6 +23,7 @@ attach(data)
 #Y="hours" # outcome variable
 #X="lwage"# endogenous variable
 #H=c("educ", "age", "kidslt6", "kidsge6", "nwifeinc")# exogenous variables
+#reps= the number of loops for the bootstrap
 result <- siv_regression(data, "hours", "lwage", c("educ", "age", "kidslt6", "kidsge6", "nwifeinc"), reps=5)
 
 iv1 <- (result$IV1)

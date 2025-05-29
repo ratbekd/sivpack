@@ -42,7 +42,9 @@ $result\$$ $delta_0$
  The first0satge equations can be obtained by using result$FS3.
 
  # Multiple endogenous variables
+ 
  In this case, use function msiv_reg (data, E, H,reps)
+ 
  result <- msiv_reg(data, "hours", c("lwage", "educ"),c( "age", "kidslt6", "kidsge6", "nwifeinc"), reps=5)
 iv1 <-(result$IV1)# a simple SIV
 iv2 <-(result$IV2)# a robust parametric SIV (RSIV-p)

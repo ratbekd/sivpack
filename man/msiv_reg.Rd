@@ -18,7 +18,7 @@ msiv_reg(data, Y, E, H, reps)
 \item{reps}{Number of bootsrap loops.}
 }
 \value{
-A list containing OLS and IV regression results.
+A list containing  IV regression results.
 }
 \description{
 Perform Instrumental Variable Regression using multiple SIVs
